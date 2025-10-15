@@ -1,47 +1,51 @@
 import express from "express";
 import crypto from "crypto";
-import dotenv from "dotenv";
+import fs from "fs";
 
-dotenv.config();
 const app = express();
 app.use(express.json());
 
-// 🔐 Load private key from .env (make sure it’s formatted correctly with newlines)
-const PRIVATE_KEY = process.env.PRIVATE_KEY.replace(/\\n/g, "\n");
+// Load your private key (not uploaded to GitHub!)
+const PRIVATE_KEY = fs.readFileSync("./private_key.pem", "utf8");
 
-// ✅ Health Check Route (no encryption required)
+// ✅ Health check route (Meta calls this first)
 app.get("/whatsapp/flows", (req, res) => {
-  res.status(200).send("Health check passed ✅");
+  res.status(200).send("OK");
 });
 
-// 🔄 Data Exchange Route (encryption required)
+// ✅ Data exchange route
 app.post("/whatsapp/flows", (req, res) => {
-    console.log("Incoming Flow data:", req.body);
-    
-  // Your actual response data (this is what WhatsApp expects back)
-  const responseData = {
+  console.log("Incoming Flow Data:", req.body);
+
+  // Response to WhatsApp
+  const responsePayload = {
     status: "success",
     data: {
-      message: "Data exchange handled successfully 🚀",
+      message: "Data exchange handled successfully",
     },
   };
 
-  const jsonString = JSON.stringify(responseData);
+  const responseJson = JSON.stringify(responsePayload);
 
-  // 🔒 Encrypt using your private key
-  const encrypted = crypto.privateEncrypt(
-    {
-      key: PRIVATE_KEY,
-      padding: crypto.constants.RSA_PKCS1_PADDING,
-    },
-    Buffer.from(jsonString)
-  );
+  try {
+    // Encrypt response
+    const encrypted = crypto.privateEncrypt(
+      {
+        key: PRIVATE_KEY,
+        padding: crypto.constants.RSA_PKCS1_PADDING,
+      },
+      Buffer.from(responseJson)
+    );
 
-  // Base64 encode the encrypted result before sending
-  const base64Response = encrypted.toString("base64");
+    // Encode as Base64
+    const base64Encoded = encrypted.toString("base64");
 
-  // ✅ Send encrypted Base64 response
-  res.status(200).type("text/plain").send(base64Response);
+    // Send plain text Base64 string (no JSON)
+    res.status(200).type("text/plain").send(base64Encoded);
+  } catch (error) {
+    console.error("Encryption error:", error);
+    res.status(500).send("Encryption failed");
+  }
 });
 
 const PORT = process.env.PORT || 3000;
